@@ -1,15 +1,60 @@
-# IDEs
+# ══════════════════════════════════════════════════════════════
+# .gitignore — Branch MAIN (espejo público de GitHub)
+# IFCD0112 — Amtigravity Launch Control
+#
+# REGLA: solo suben archivos con "Apunte/APUNTES" en el nombre
+#        + Semana 1 Material_Alumno (formato viejo)
+#        + infraestructura GitHub (README, LICENSE, docs, .github)
+# ══════════════════════════════════════════════════════════════
+
+# ─── MATERIAL PRIVADO DEL PROFESOR ───────────────────────────
+.profesor/
+.claude/
+cursos/
+plantillas/
+00_Administracion_Curso/
+
+# ─── DOCUMENTOS INTERNOS ─────────────────────────────────────
+CLAUDE.md
+METODO.md
+PROGRESS.md
+Propuesta_Pedagogica_2026.md
+
+# ─── SCRIPTS INTERNOS ────────────────────────────────────────
+gestionar_curso.sh
+sincronizar_vm.sh
+sync_curso.sh
+sync_curso.log
+
+# ─── GUIAS DEL PROFESOR (en cualquier carpeta) ───────────────
+**/Guia_Profesor/
+
+# ─── MATERIAL ALUMNO FORMATO VIEJO (excepto Semana 1) ───────
+# Semana 1 ya está commiteada — esto protege las demás
+01_Fase_I_Fundamentos_BOE_MF0223/Semana_[2-9]*/Material_Alumno/
+01_Fase_I_Fundamentos_BOE_MF0223/Semana_1[0-9]*/Material_Alumno/
+
+# ─── PROYECCIONES (DD-MM-AA sin "apunte" en el nombre) ──────
+**/[0-9][0-9]-[0-9][0-9]-[0-9][0-9]_*.md
+!**/*[Aa]punte*
+
+# ─── FASES NO INICIADAS ─────────────────────────────────────
+02_Fase_II*/
+03_Fase_III*/
+
+# ─── IDEs ────────────────────────────────────────────────────
 .idea/
 .vscode/
 *.swp
 *.swo
 
-# OS
+# ─── OS ──────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# Logs locales
-.claude/logs/
-
-# Output generado (opcional — descomentar si no quieres versionar material)
-# cursos/*/output/
+# ─── LOGS Y TEMPORALES ──────────────────────────────────────
+*.log
+*.tmp
+*.bak
+*~
