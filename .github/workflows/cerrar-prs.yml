@@ -1,0 +1,33 @@
+name: Cerrar PRs automaticamente
+
+on:
+  pull_request_target:
+    types: [opened]
+
+jobs:
+  cerrar:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Cerrar PR y comentar
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: `Gracias por tu interes, pero este repositorio no acepta Pull Requests.
+
+            Este es material docente del certificado **IFCD0112 - Programacion con lenguajes orientados a objetos**.
+
+            Si encontraste un error o quieres sugerir algo, por favor abre un [Issue](https://github.com/TodoEconometria/ifcd0112_launch-control_Repo/issues/new/choose).`
+            });
+
+            await github.rest.pulls.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              state: 'closed'
+            });

@@ -1,0 +1,2 @@
+# Forzar LF en scripts para que funcionen en Linux/VM sin conversión
+*.sh text eol=lf

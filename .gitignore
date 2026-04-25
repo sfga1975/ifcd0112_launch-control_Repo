@@ -1,0 +1,15 @@
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs locales
+.claude/logs/
+
+# Output generado (opcional — descomentar si no quieres versionar material)
+# cursos/*/output/
