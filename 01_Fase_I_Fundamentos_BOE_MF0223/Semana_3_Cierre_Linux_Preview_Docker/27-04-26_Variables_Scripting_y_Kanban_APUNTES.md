@@ -1,27 +1,35 @@
 # Variables de Entorno, Scripting Bash y Gestión Kanban — APUNTES
 
 **Certificado:** IFCD0112 | **Sesión 13** | Lunes 27 de abril de 2026
-**Prof.** Juan Marcelo Gutiérrez Miranda | @TodoEconometría
+**Prof.** Juan Marcelo Gutiérrez Miranda | @TodoEconometria
 
 ---
 
-## Reconexión — ¿Dónde estamos?
+## Reconexión
 
-_(Tus notas aquí)_
+Verificación rápida:
+
+```bash
+ping -c 2 192.168.56.20
+ssh alumno@192.168.56.20 hostname
+ip addr show | grep 192.168.56
+```
 
 ---
 
 # BLOQUE I — Variables de Entorno
 
-## ¿Cómo sabe el sistema dónde está `python3`?
+## ¿Cómo sabe Linux dónde están las cosas?
 
 _(Tus notas aquí)_
 
 ```bash
+# ¿Cuáles son las carpetas donde busca?
 echo $PATH | tr ':' '\n'
 ```
 
 ```bash
+# ¿Dónde encontró cada ejecutable?
 which python3
 which git
 which inventado
@@ -29,7 +37,7 @@ which inventado
 
 ---
 
-## Las variables de entorno son el sistema nervioso de Linux
+## Las variables de entorno: el sistema nervioso de Linux
 
 _(Tus notas aquí)_
 
@@ -39,9 +47,9 @@ env
 echo $HOME
 echo $USER
 echo $SHELL
-echo $LANG
-echo $PWD
 echo $HOSTNAME
+echo $PWD
+echo $LANG
 ```
 
 ### Variables que leen las aplicaciones
@@ -50,24 +58,39 @@ echo $HOSTNAME
 |---|---|---|
 | PostgreSQL | `$PGHOST`, `$PGPORT`, `$PGUSER` | Conexión a la BD |
 | Python | `$PYTHONPATH` | Encontrar módulos |
-| Docker | `$DOCKER_HOST` | Ubicación del daemon |
 | Git | `$GIT_AUTHOR_NAME`, `$GIT_AUTHOR_EMAIL` | Identidad en commits |
+| Docker | `$DOCKER_HOST` | Ubicación del daemon |
+
+### Comparar $HOSTNAME entre máquinas
+
+```bash
+# Desde Desktop:
+echo "Estoy en: $HOSTNAME"
+
+# Desde Artemis (por SSH):
+ssh alumno@192.168.56.20 'echo "Estoy en: $HOSTNAME"'
+```
 
 ---
 
 ## Crear y exportar variables
 
-_(Tus notas aquí)_
+_(Tus notas aquí — diferencia entre local y exportada)_
 
 ```bash
-SALUDO="Hola desde Artemis"
-echo $SALUDO
+# Variable local — solo esta terminal
+MISION="artemis-01"
+echo $MISION
 
-export CURSO="IFCD0112"
+# Variable exportada — visible para scripts y procesos hijos
+export CLUSTER_IP="192.168.56.20"
 export PROYECTO="launch-control"
-echo "Curso: $CURSO, Proyecto: $PROYECTO"
+export CURSO="IFCD0112"
 
-env | grep CURSO
+echo "Cluster: $CLUSTER_IP, Proyecto: $PROYECTO"
+
+env | grep CLUSTER
+env | grep PROYECTO
 ```
 
 ---
@@ -77,31 +100,45 @@ env | grep CURSO
 _(Tus notas aquí)_
 
 ```bash
+# Crear directorio para scripts propios
 mkdir -p ~/bin
 
-cat > ~/bin/saludo.sh << 'EOF'
+# Script de prueba — saludo del cluster
+cat > ~/bin/saludo_cluster.sh << 'EOF'
 #!/bin/bash
 echo "══════════════════════════════════════"
-echo "  Hola, soy $USER en $(hostname)"
+echo "  Cluster Launch Control"
+echo "  Operador: $USER en $(hostname)"
 echo "  Fecha: $(date '+%d/%m/%Y %H:%M')"
-echo "  Directorio: $PWD"
+echo "  Red interna: $(ip -4 addr show | grep 192.168.56 | awk '{print $2}')"
 echo "══════════════════════════════════════"
 EOF
 
-chmod +x ~/bin/saludo.sh
-~/bin/saludo.sh
+chmod +x ~/bin/saludo_cluster.sh
 
+# Sin PATH — ruta completa:
+~/bin/saludo_cluster.sh
+
+# Añadir ~/bin al PATH:
 export PATH="$PATH:$HOME/bin"
+
+# Ahora funciona desde cualquier directorio:
 cd /tmp
-saludo.sh
+saludo_cluster.sh
 cd ~
 ```
 
 ---
 
-## .bashrc — La configuración permanente del shell
+## .bashrc — La memoria permanente del shell
 
-_(Tus notas aquí)_
+_(Tus notas aquí — cuándo se ejecuta .bashrc vs .bash_profile)_
+
+| Archivo | Cuándo se ejecuta |
+|---|---|
+| `.bash_profile` | Al iniciar sesión (SSH, tty, `su -`) |
+| `.bashrc` | En cada terminal nueva (escritorio, tmux) |
+| **Regla Ubuntu** | Editar `.bashrc` (cubre ambos casos) |
 
 ```bash
 cat ~/.bashrc
@@ -111,42 +148,149 @@ nano ~/.bashrc
 Agregar al final:
 
 ```bash
-# ─── Configuración curso IFCD0112 ──────────────────────────
+# ─── Configuración cluster Launch Control ────────────────────
 export CURSO_DIR="$HOME/curso_ifcd0112"
 export PATH="$PATH:$HOME/bin"
 
+# IPs del cluster
+export ARTEMIS_IP="192.168.56.20"
+export DESKTOP_IP="192.168.56.10"
+
+# Alias útiles
 alias ll='ls -la --color=auto'
 alias ..='cd ..'
 alias ...='cd ../..'
 alias gs='git status'
 alias glog='git log --oneline -10'
+
+# Alias del cluster
+alias ping-artemis='ping -c 3 $ARTEMIS_IP'
+alias ssh-artemis='ssh alumno@$ARTEMIS_IP'
+alias estado='estado_cluster.sh'
 ```
 
 ```bash
 source ~/.bashrc
+
+echo $ARTEMIS_IP
+ping-artemis
 echo $CURSO_DIR
 ll
 ```
-
-### .bashrc vs .bash_profile
-
-| Archivo | Cuándo se ejecuta |
-|---|---|
-| `.bash_profile` | Al iniciar sesión (SSH, tty, `su -`) |
-| `.bashrc` | En cada terminal nueva (escritorio, tmux) |
-| **Regla Ubuntu** | Editar `.bashrc` (cubre ambos casos) |
 
 ---
 
 # BLOQUE II — Scripting Bash
 
-## Script 1 — Backup del proyecto Launch Control
+## ¿Por qué automatizar?
+
+_(Tus notas aquí)_
+
+---
+
+## Script 1 — Estado del cluster
+
+```bash
+#!/bin/bash
+# estado_cluster.sh — Diagnóstico del cluster Launch Control
+
+echo "═══════════════════════════════════════════"
+echo "  ESTADO DEL CLUSTER — $(hostname)"
+echo "  $(date '+%A %d de %B de %Y, %H:%M')"
+echo "═══════════════════════════════════════════"
+echo ""
+
+# --- Identidad ---
+echo "IDENTIDAD:"
+echo "   Operador: $USER"
+echo "   Máquina:  $(hostname)"
+echo "   Home:     $HOME"
+echo ""
+
+# --- Red del cluster ---
+echo "RED DEL CLUSTER:"
+ip -4 addr show | grep "inet " | grep -v "127.0.0.1" | \
+    awk '{printf "   %s → %s\n", $NF, $2}'
+echo ""
+
+# --- Ping a Artemis ---
+echo "CONECTIVIDAD:"
+if ping -c 1 -W 2 192.168.56.20 &>/dev/null; then
+    echo "   Artemis (192.168.56.20): ONLINE"
+else
+    echo "   Artemis (192.168.56.20): OFFLINE"
+fi
+
+if ping -c 1 -W 2 192.168.56.10 &>/dev/null; then
+    echo "   Desktop (192.168.56.10): ONLINE"
+else
+    echo "   Desktop (192.168.56.10): OFFLINE"
+fi
+echo ""
+
+# --- Disco ---
+echo "DISCO:"
+df -h / | tail -1 | awk '{printf "   Usado: %s de %s (%s)\n", $3, $2, $5}'
+echo ""
+
+# --- Memoria ---
+echo "MEMORIA:"
+free -h | grep Mem | awk '{printf "   Usada: %s de %s\n", $3, $2}'
+echo ""
+
+# --- Procesos ---
+TOTAL_PROCS=$(ps aux | wc -l)
+MIS_PROCS=$(ps aux | grep "^$USER" | wc -l)
+echo "PROCESOS:"
+echo "   Total: $TOTAL_PROCS | Míos: $MIS_PROCS"
+echo ""
+
+# --- Top 3 por RAM ---
+echo "TOP 3 PROCESOS (por RAM):"
+ps aux --sort=-%mem | head -4 | tail -3 | \
+    awk '{printf "   %-20s %s%% RAM (%s)\n", $11, $4, $1}'
+echo ""
+
+# --- SSH a Artemis ---
+echo "SSH A ARTEMIS:"
+if ssh -o ConnectTimeout=3 -o BatchMode=yes alumno@192.168.56.20 'echo OK' 2>/dev/null; then
+    echo "   Conexión SSH: OK"
+    ARTEMIS_UPTIME=$(ssh -o ConnectTimeout=3 alumno@192.168.56.20 'uptime -p' 2>/dev/null)
+    echo "   Uptime Artemis: $ARTEMIS_UPTIME"
+else
+    echo "   Conexión SSH: FALLO (¿está encendida? ¿clave configurada?)"
+fi
+echo ""
+
+# --- Últimos archivos del proyecto ---
+if [ -d "$HOME/curso_ifcd0112" ]; then
+    echo "ÚLTIMOS ARCHIVOS MODIFICADOS (proyecto):"
+    find "$HOME/curso_ifcd0112" -type f -printf '%T@ %p\n' 2>/dev/null | \
+        sort -rn | head -3 | \
+        while read -r ts file; do
+            fecha=$(date -d "@${ts%.*}" '+%d/%m %H:%M')
+            echo "   $fecha — $(basename "$file")"
+        done
+    echo ""
+fi
+
+echo "═══════════════════════════════════════════"
+```
+
+```bash
+chmod +x ~/bin/estado_cluster.sh
+estado
+```
+
+---
+
+## Script 2 — Backup del proyecto con fecha
 
 _(Tus notas aquí)_
 
 ```bash
 #!/bin/bash
-# backup_launch_control.sh — Backup comprimido con fecha
+# backup_proyecto.sh — Backup comprimido de Launch Control
 
 FECHA=$(date +%Y-%m-%d_%H%M)
 ORIGEN="$HOME/curso_ifcd0112"
@@ -161,14 +305,14 @@ if [ ! -d "$ORIGEN" ]; then
     exit 1
 fi
 
-echo "Creando backup..."
+echo "Creando backup de Launch Control..."
 tar -czf "$DESTINO/$NOMBRE" -C "$HOME" "curso_ifcd0112"
 
 if [ $? -eq 0 ]; then
     TAMANO=$(du -sh "$DESTINO/$NOMBRE" | cut -f1)
-    echo "✓ Backup creado: $DESTINO/$NOMBRE ($TAMANO)"
+    echo "Backup creado: $DESTINO/$NOMBRE ($TAMANO)"
 else
-    echo "✗ ERROR al crear el backup"
+    echo "ERROR al crear el backup"
     exit 1
 fi
 
@@ -178,118 +322,73 @@ ls -lht "$DESTINO"/launch_control_*.tar.gz 2>/dev/null | head -5
 ```
 
 ```bash
-chmod +x ~/bin/backup_launch_control.sh
+chmod +x ~/bin/backup_proyecto.sh
 mkdir -p ~/curso_ifcd0112
 echo "archivo de prueba" > ~/curso_ifcd0112/test.txt
-backup_launch_control.sh
-```
-
----
-
-## Script 2 — Estado del sistema
-
-_(Tus notas aquí)_
-
-```bash
-#!/bin/bash
-# estado_sistema.sh — Diagnóstico rápido del sistema
-
-echo "═══════════════════════════════════════════"
-echo "  ESTADO DEL SISTEMA — $(hostname)"
-echo "  $(date '+%A %d de %B de %Y, %H:%M')"
-echo "═══════════════════════════════════════════"
-echo ""
-
-echo "👤 Usuario: $USER"
-echo "🖥️  Host:    $(hostname)"
-echo "📁 Home:    $HOME"
-echo "📂 Actual:  $PWD"
-echo ""
-
-echo "💾 DISCO:"
-df -h / | tail -1 | awk '{printf "   Usado: %s de %s (%s)\n", $3, $2, $5}'
-echo ""
-
-echo "🧠 MEMORIA:"
-free -h | grep Mem | awk '{printf "   Usada: %s de %s\n", $3, $2}'
-echo ""
-
-TOTAL_PROCS=$(ps aux | wc -l)
-MIS_PROCS=$(ps aux | grep "^$USER" | wc -l)
-echo "⚙️  PROCESOS:"
-echo "   Total: $TOTAL_PROCS"
-echo "   Míos:  $MIS_PROCS"
-echo ""
-
-echo "📊 TOP 3 PROCESOS (por RAM):"
-ps aux --sort=-%mem | head -4 | tail -3 | awk '{printf "   %s — %s%% RAM — %s\n", $11, $4, $1}'
-echo ""
-
-if command -v ip &>/dev/null; then
-    echo "🌐 RED:"
-    ip -4 addr show | grep "inet " | grep -v "127.0.0.1" | awk '{printf "   %s → %s\n", $NF, $2}'
-    echo ""
-fi
-
-if [ -d "$HOME/curso_ifcd0112" ]; then
-    echo "📝 ÚLTIMOS ARCHIVOS MODIFICADOS (curso):"
-    find "$HOME/curso_ifcd0112" -type f -printf '%T@ %p\n' 2>/dev/null | \
-        sort -rn | head -3 | \
-        while read -r ts file; do
-            fecha=$(date -d "@${ts%.*}" '+%d/%m %H:%M')
-            echo "   $fecha — $(basename "$file")"
-        done
-    echo ""
-fi
-
-echo "═══════════════════════════════════════════"
-```
-
-```bash
-chmod +x ~/bin/estado_sistema.sh
-estado_sistema.sh
+backup_proyecto.sh
 ```
 
 ---
 
 ## Estructuras de control en Bash
 
-_(Tus notas aquí)_
+_(Tus notas aquí — condicionales, bucles, variables especiales)_
+
+### Operadores de comparación
+
+| Archivos | Strings | Números |
+|---|---|---|
+| `[ -f archivo ]` existe | `[ "$A" = "$B" ]` iguales | `[ $A -eq $B ]` igual |
+| `[ -d directorio ]` existe | `[ "$A" != "$B" ]` distintos | `[ $A -lt $B ]` menor |
+| `[ ! -f archivo ]` no existe | `[ -z "$A" ]` vacío | `[ $A -gt $B ]` mayor |
 
 ### Condicionales
 
 ```bash
-if [ -f ~/.bashrc ]; then
-    echo "El .bashrc existe"
-else
-    echo "No hay .bashrc"
-fi
-
+# ¿Existe el directorio del proyecto?
 if [ -d ~/curso_ifcd0112 ]; then
     echo "El proyecto existe"
+    echo "Archivos: $(ls ~/curso_ifcd0112 | wc -l)"
 else
+    echo "El proyecto no existe — creando..."
     mkdir -p ~/curso_ifcd0112
 fi
 
-USUARIO=$(whoami)
-if [ "$USUARIO" = "root" ]; then
-    echo "PELIGRO: estás como root"
-elif [ "$USUARIO" = "jefe" ]; then
-    echo "Bienvenido, profesor"
+# ¿En qué máquina del cluster estoy?
+MAQUINA=$(hostname)
+if [ "$MAQUINA" = "artemis" ]; then
+    echo "Estás en el SERVIDOR (Artemis)"
+    echo "IP esperada: 192.168.56.20"
+elif [ "$MAQUINA" = "desktop" ]; then
+    echo "Estás en el CLIENTE (Desktop)"
+    echo "IP esperada: 192.168.56.10"
 else
-    echo "Hola, $USUARIO"
+    echo "Máquina no reconocida: $MAQUINA"
+fi
+
+# ¿Artemis está online?
+if ping -c 1 -W 2 192.168.56.20 &>/dev/null; then
+    echo "Artemis está ONLINE"
+else
+    echo "ALERTA: Artemis no responde"
 fi
 ```
 
 ### Bucles
 
 ```bash
+# Recorrer archivos del proyecto
 for archivo in ~/curso_ifcd0112/*.txt; do
     echo "Archivo: $(basename "$archivo") — $(wc -l < "$archivo") líneas"
 done
 
-for i in $(seq 1 10); do
-    echo "Número: $i"
+# Hacer ping a varias máquinas del cluster
+for IP in 192.168.56.10 192.168.56.20 192.168.56.1; do
+    if ping -c 1 -W 1 "$IP" &>/dev/null; then
+        echo "$IP → ONLINE"
+    else
+        echo "$IP → OFFLINE"
+    fi
 done
 ```
 
@@ -305,25 +404,47 @@ done
 
 ```bash
 #!/bin/bash
-echo "Script: $0"
-echo "Argumentos: $#"
-echo "Primero: $1"
-echo "Segundo: $2"
-echo "Todos: $@"
+# ping_nodo.sh — Verificar un nodo del cluster
+# Uso: ping_nodo.sh <nombre> <ip>
+
+if [ $# -lt 2 ]; then
+    echo "Uso: ping_nodo.sh <nombre> <ip>"
+    echo "Ejemplo: ping_nodo.sh artemis 192.168.56.20"
+    exit 1
+fi
+
+NOMBRE="$1"
+IP="$2"
+
+echo "Verificando nodo $NOMBRE ($IP)..."
+if ping -c 3 -W 2 "$IP" &>/dev/null; then
+    echo "  $NOMBRE está ONLINE"
+    exit 0
+else
+    echo "  $NOMBRE está OFFLINE"
+    exit 1
+fi
+```
+
+```bash
+chmod +x ~/bin/ping_nodo.sh
+ping_nodo.sh artemis 192.168.56.20
+ping_nodo.sh desktop 192.168.56.10
+echo "Código de salida: $?"
 ```
 
 ---
 
-## Ejercicio práctico — Script de monitorización
+## Script 3 — Monitor del cluster en tiempo real
 
 _(Tus notas aquí)_
 
 ```bash
 #!/bin/bash
-# monitor.sh — Monitorizar un directorio
-# Uso: monitor.sh /ruta/directorio [intervalo_segundos]
+# monitor_cluster.sh — Monitorizar directorio + estado del cluster
+# Uso: monitor_cluster.sh [directorio] [intervalo_segundos]
 
-DIRECTORIO="${1:-.}"
+DIRECTORIO="${1:-$HOME/curso_ifcd0112}"
 INTERVALO="${2:-5}"
 
 if [ ! -d "$DIRECTORIO" ]; then
@@ -331,7 +452,8 @@ if [ ! -d "$DIRECTORIO" ]; then
     exit 1
 fi
 
-echo "Monitorizando: $DIRECTORIO (cada ${INTERVALO}s)"
+echo "Monitor Launch Control — $(hostname)"
+echo "Directorio: $DIRECTORIO | Intervalo: ${INTERVALO}s"
 echo "Ctrl+C para detener"
 echo ""
 
@@ -340,14 +462,21 @@ while true; do
     TAMANO=$(du -sh "$DIRECTORIO" 2>/dev/null | cut -f1)
     ULTIMO=$(find "$DIRECTORIO" -type f -printf '%T@ %p\n' 2>/dev/null | \
              sort -rn | head -1 | cut -d' ' -f2-)
-    echo "[$(date '+%H:%M:%S')] Archivos: $ARCHIVOS | Tamaño: $TAMANO | Último: $(basename "$ULTIMO" 2>/dev/null)"
+
+    if ping -c 1 -W 1 192.168.56.20 &>/dev/null; then
+        ARTEMIS="ON"
+    else
+        ARTEMIS="OFF"
+    fi
+
+    echo "[$(date '+%H:%M:%S')] Archivos: $ARCHIVOS | Tamaño: $TAMANO | Artemis: $ARTEMIS | Último: $(basename "$ULTIMO" 2>/dev/null)"
     sleep "$INTERVALO"
 done
 ```
 
 ```bash
-chmod +x ~/bin/monitor.sh
-monitor.sh ~/curso_ifcd0112 3
+chmod +x ~/bin/monitor_cluster.sh
+monitor_cluster.sh ~/curso_ifcd0112 3
 ```
 
 ---
@@ -358,14 +487,14 @@ _(Tus notas aquí)_
 
 ```bash
 #!/bin/bash
-# info_red.sh — Mostrar información de red de la máquina
+# info_red.sh — Info de red de esta máquina del cluster
 
 echo "═══════════════════════════════════════════"
 echo "  INFO RED — $(hostname)"
 echo "═══════════════════════════════════════════"
 echo ""
 
-echo "🌐 INTERFACES DE RED:"
+echo "INTERFACES DE RED:"
 ip -4 addr show | grep -E "inet |^[0-9]" | while read -r linea; do
     if echo "$linea" | grep -q "^[0-9]"; then
         IFACE=$(echo "$linea" | awk -F: '{print $2}' | tr -d ' ')
@@ -379,25 +508,31 @@ ip -4 addr show | grep -E "inet |^[0-9]" | while read -r linea; do
 done
 echo ""
 
-echo "🚪 GATEWAY:"
-ip route | grep default | awk '{printf "   %s vía %s\n", $5, $3}'
+echo "GATEWAY:"
+ip route | grep default | awk '{printf "   %s via %s\n", $5, $3}'
 echo ""
 
-echo "📡 DNS:"
+echo "DNS:"
 if [ -f /etc/resolv.conf ]; then
     grep "^nameserver" /etc/resolv.conf | awk '{printf "   %s\n", $2}'
 fi
 echo ""
 
-echo "🌍 CONECTIVIDAD:"
-if ping -c 1 -W 2 8.8.8.8 &>/dev/null; then
-    echo "   Internet: ✓ OK"
+echo "CONECTIVIDAD:"
+if ping -c 1 -W 2 192.168.56.20 &>/dev/null; then
+    echo "   Artemis: ONLINE"
 else
-    echo "   Internet: ✗ Sin conexión"
+    echo "   Artemis: OFFLINE"
+fi
+
+if ping -c 1 -W 2 8.8.8.8 &>/dev/null; then
+    echo "   Internet: OK"
+else
+    echo "   Internet: Sin conexión"
 fi
 
 echo ""
-echo "🔌 PUERTOS ESCUCHANDO:"
+echo "PUERTOS ESCUCHANDO:"
 ss -tlnp 2>/dev/null | grep LISTEN | awk '{printf "   %s (%s)\n", $4, $NF}' | head -10
 
 echo ""
@@ -413,30 +548,39 @@ info_red.sh
 
 # BLOQUE III — Kanban y Lógica Computacional
 
+## ¿Cómo se organiza un equipo de desarrollo real?
+
+_(Tus notas aquí)_
+
+---
+
 ## El tablero Kanban
 
 _(Tus notas aquí)_
 
 ```
-┌─────────────────┬─────────────────┬─────────────────┐
-│    📋 TO DO     │  🔨 IN PROGRESS │    ✅ DONE      │
-├─────────────────┼─────────────────┼─────────────────┤
-│                 │                 │                 │
-│                 │                 │                 │
-└─────────────────┴─────────────────┴─────────────────┘
+┌────────────────────┬────────────────────┬────────────────────┐
+│    TO DO           │   IN PROGRESS      │      DONE          │
+├────────────────────┼────────────────────┼────────────────────┤
+│                    │                    │                    │
+│                    │                    │                    │
+└────────────────────┴────────────────────┴────────────────────┘
 ```
 
 | Regla | Detalle |
 |---|---|
 | WIP limit | Máximo 1-2 tareas en progreso |
 | Regla de 2 días | Si lleva +2 días en progress → dividir o reportar |
-| Herramienta | Trello — tablero de la clase |
+| Mover obligatorio | Cuando empiezas → mover. Cuando terminas → mover |
+| Herramienta | Trello — tablero del curso |
 
 ---
 
-## Pseudocódigo — Ejemplo
+## Lógica computacional — Pensar antes de codificar
 
-_(Tus notas aquí)_
+_(Tus notas aquí — por qué el pseudocódigo es más importante que el lenguaje)_
+
+### Ejemplo: pseudocódigo de autenticación
 
 ```
 FUNCIÓN autenticar_usuario(nombre, contraseña):
@@ -472,7 +616,6 @@ _(Tus notas aquí)_
 ### Ejercicio A — Clasificar una contraseña
 
 ```
-Dado una contraseña (texto):
 - Si está vacía → "Sin contraseña"
 - Si tiene menos de 8 caracteres → "Débil"
 - Si tiene 8+ y solo letras/números → "Media"
@@ -481,11 +624,13 @@ Dado una contraseña (texto):
 
 _(Tu pseudocódigo aquí)_
 
-### Ejercicio B — Buscar el mayor de tres números
+### Ejercicio B — Verificar nodos del cluster
 
 ```
-Dados tres números A, B y C:
-Devolver el mayor (sin funciones de librería)
+Dada una lista de nodos con nombre e IP:
+Para cada nodo, hacer ping.
+Responde → ONLINE. No responde → OFFLINE + sumar fallo.
+Al final: resumen + alerta si hay alguno offline.
 ```
 
 _(Tu pseudocódigo aquí)_
@@ -508,13 +653,13 @@ _(Tu pseudocódigo aquí)_
 
 ---
 
-## Script que valida contraseña — Del pseudocódigo al código
+## Del pseudocódigo al código — Validar contraseña
 
-_(Tus notas aquí)_
+_(Tus notas aquí — comparar tu pseudocódigo con el código real)_
 
 ```bash
 #!/bin/bash
-# validar_password.sh — Clasificar fuerza de contraseña
+# validar_password.sh — Del pseudocódigo al código real
 
 if [ $# -eq 0 ]; then
     echo "Uso: validar_password.sh <contraseña>"
@@ -525,12 +670,12 @@ PASSWORD="$1"
 LONGITUD=${#PASSWORD}
 
 if [ $LONGITUD -eq 0 ]; then
-    echo "🚫 Sin contraseña"
+    echo "Sin contraseña"
     exit 1
 fi
 
 if [ $LONGITUD -lt 8 ]; then
-    echo "🔴 DÉBIL — Solo $LONGITUD caracteres (mínimo 8)"
+    echo "DÉBIL — Solo $LONGITUD caracteres (mínimo 8)"
     exit 0
 fi
 
@@ -543,11 +688,11 @@ echo "$PASSWORD" | grep -q '[0-9]' && TIENE_NUMEROS=1
 echo "$PASSWORD" | grep -q '[^a-zA-Z0-9]' && TIENE_SIMBOLOS=1
 
 if [ $TIENE_LETRAS -eq 1 ] && [ $TIENE_NUMEROS -eq 1 ] && [ $TIENE_SIMBOLOS -eq 1 ]; then
-    echo "🟢 FUERTE — $LONGITUD caracteres, letras + números + símbolos"
+    echo "FUERTE — $LONGITUD caracteres, letras + números + símbolos"
 elif [ $TIENE_LETRAS -eq 1 ] && [ $TIENE_NUMEROS -eq 1 ]; then
-    echo "🟡 MEDIA — $LONGITUD caracteres, letras + números (falta símbolo)"
+    echo "MEDIA — $LONGITUD caracteres, letras + números (falta símbolo)"
 else
-    echo "🟡 MEDIA — $LONGITUD caracteres, pero le falta variedad"
+    echo "MEDIA — $LONGITUD caracteres, pero le falta variedad"
 fi
 ```
 
@@ -599,7 +744,7 @@ validar_password.sh "Abc123!@"
 
 **Fecha límite:** Martes 28 de abril a las 09:00
 
-1. Script `estado_sistema.sh` funcionando + captura
+1. Script `estado_cluster.sh` funcionando + captura
 2. Pseudocódigo de los 4 ejercicios de lógica (A, B, C, D) en `.md`
 3. Diagrama de flujo de Napkin.ai para Ejercicio A o C (captura)
 4. Captura del tablero Trello con al menos 3 tareas organizadas
@@ -611,26 +756,20 @@ Entregar en `~/curso_ifcd0112/tareas/tarea_13/`
 ## Autoevaluación
 
 1. ¿Qué comando muestra dónde está un ejecutable en el PATH?
-   > `which programa`
 
 2. ¿Cuál es la diferencia entre `VARIABLE="valor"` y `export VARIABLE="valor"`?
-   > Sin export: solo visible en el shell actual. Con export: visible para procesos hijos.
 
 3. ¿Dónde se guardan las variables permanentes en Ubuntu?
-   > En `~/.bashrc`
 
 4. ¿Qué hace `source ~/.bashrc`?
-   > Recarga la configuración del shell sin cerrar la terminal.
 
 5. ¿Qué significa `$?` en un script?
-   > El código de salida del último comando (0 = éxito, otro número = error).
 
 6. ¿Qué es el WIP limit en Kanban?
-   > Máximo de tareas que pueden estar en "In Progress" al mismo tiempo (1-2).
 
 7. ¿Por qué escribimos pseudocódigo antes de codificar?
-   > Para pensar la lógica independientemente del lenguaje, detectar edge cases y tener un plan antes de implementar.
 
 ---
 
-_Prof. Juan Marcelo Gutiérrez Miranda | @TodoEconometría_
+_Prof. Juan Marcelo Gutiérrez Miranda | @TodoEconometria_
+_Amtigravity Launch Control — IFCD0112_
